@@ -27,6 +27,22 @@ const clanSchema = new mongoose.Schema(
       type: String,
       default: 'shield',
     },
+    avatar: {
+      type: String,
+      default: 'bk',
+    },
+    bannerUrl: {
+      type: String,
+      default: '',
+    },
+    bannerTitle: {
+      type: String,
+      default: '',
+    },
+    bannerFilter: {
+      type: String,
+      default: 'none',
+    },
     leader: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

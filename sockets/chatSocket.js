@@ -90,6 +90,12 @@ const initChatSocket = (io) => {
       io.to(`conversation_${message.conversationId}`).emit('message_deleted', message);
     });
 
+    // Handle real-time message reactions
+    socket.on('react_message', (message) => {
+      if (!message || !message.conversationId) return;
+      io.to(`conversation_${message.conversationId}`).emit('message_reacted', message);
+    });
+
     // Handle War Horn Broadcast to all clan channels
     socket.on('broadcast_warhorn', (data) => {
       if (!data) return;
@@ -101,6 +107,25 @@ const initChatSocket = (io) => {
         });
       }
       io.emit('new_warhorn_broadcast', data);
+    });
+
+    // Handle real-time friend request events
+    socket.on('send_friend_request', ({ recipientId, request }) => {
+      if (recipientId) {
+        io.to(`user_${recipientId}`).emit('friend_request_received', request);
+      }
+    });
+
+    socket.on('accept_friend_request', ({ senderId, request }) => {
+      if (senderId) {
+        io.to(`user_${senderId}`).emit('friend_request_accepted', request);
+      }
+    });
+
+    socket.on('reject_friend_request', ({ senderId, requestId }) => {
+      if (senderId) {
+        io.to(`user_${senderId}`).emit('friend_request_rejected', { requestId });
+      }
     });
 
     // Handle disconnect

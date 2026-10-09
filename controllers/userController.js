@@ -1,9 +1,12 @@
 const User = require('../models/User');
+const FriendRequest = require('../models/FriendRequest');
 
 // @desc    Get all users or search users
 // @route   GET /api/users
 const getUsers = async (req, res) => {
   try {
+    const currentUser = await User.findById(req.user._id);
+
     const search = req.query.search
       ? {
           $or: [
@@ -13,12 +16,62 @@ const getUsers = async (req, res) => {
         }
       : {};
 
-    const users = await User.find({
+    let queryFilter = {
       ...search,
       _id: { $ne: req.user._id },
-    }).select('-password');
+    };
 
-    res.json(users);
+    // If current user is a registered user (not demo) AND NOT searching,
+    // only show demo users AND accepted friends in default roster list!
+    if (currentUser && !currentUser.isDemoUser && !req.query.search) {
+      queryFilter.$or = [
+        { isDemoUser: true },
+        { _id: { $in: currentUser.friends || [] } },
+      ];
+    }
+
+    const users = await User.find(queryFilter).select('-password');
+
+    // Fetch friend requests involving current user to compute friendStatus
+    const friendRequests = await FriendRequest.find({
+      $or: [{ sender: req.user._id }, { recipient: req.user._id }],
+      status: 'pending',
+    });
+
+    const friendsSet = new Set(
+      (currentUser?.friends || []).map((fId) => String(fId))
+    );
+
+    const usersWithStatus = users.map((u) => {
+      const uObj = u.toObject();
+      const uIdStr = String(u._id);
+
+      if (u.isDemoUser) {
+        uObj.friendStatus = 'demo';
+      } else if (friendsSet.has(uIdStr)) {
+        uObj.friendStatus = 'friend';
+      } else {
+        const reqSent = friendRequests.find(
+          (fr) => String(fr.sender) === String(req.user._id) && String(fr.recipient) === uIdStr
+        );
+        const reqReceived = friendRequests.find(
+          (fr) => String(fr.recipient) === String(req.user._id) && String(fr.sender) === uIdStr
+        );
+
+        if (reqSent) {
+          uObj.friendStatus = 'pending_sent';
+          uObj.friendRequestId = reqSent._id;
+        } else if (reqReceived) {
+          uObj.friendStatus = 'pending_received';
+          uObj.friendRequestId = reqReceived._id;
+        } else {
+          uObj.friendStatus = 'none';
+        }
+      }
+      return uObj;
+    });
+
+    res.json(usersWithStatus);
   } catch (error) {
     console.error('[Get Users Error]', error);
     res.status(500).json({ message: 'Server error fetching warriors list' });

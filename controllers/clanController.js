@@ -17,7 +17,7 @@ const generateClanTag = () => {
 // @access  Private
 const createClan = async (req, res) => {
   try {
-    const { name, description, bannerPattern, shieldEmblem, memberIds } = req.body;
+    const { name, description, bannerPattern, shieldEmblem, avatar, bannerUrl, bannerTitle, bannerFilter, memberIds } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ message: 'Clan name is required' });
@@ -64,8 +64,12 @@ const createClan = async (req, res) => {
       name: name.trim(),
       description: description ? description.trim() : undefined,
       tag,
-      bannerPattern: bannerPattern || 'crimson-fire',
+      bannerPattern: bannerPattern || 'arena',
       shieldEmblem: shieldEmblem || 'shield',
+      avatar: avatar || 'bk',
+      bannerUrl: bannerUrl || '',
+      bannerTitle: bannerTitle || '',
+      bannerFilter: bannerFilter || 'none',
       leader: req.user._id,
       members: membersList,
       trophies: req.user.trophies || 2450,

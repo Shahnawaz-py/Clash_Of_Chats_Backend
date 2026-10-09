@@ -74,6 +74,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: 'Fearless Clash warrior ready for battle.',
     },
+    friends: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
   },
   {
     timestamps: true,

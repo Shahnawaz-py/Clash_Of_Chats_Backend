@@ -39,6 +39,27 @@ const createOrGetConversation = async (req, res) => {
       return res.status(400).json({ message: 'Cannot create conversation with yourself' });
     }
 
+    const currentUser = await User.findById(req.user._id);
+    const recipientUser = await User.findById(recipientId);
+
+    if (!recipientUser) {
+      return res.status(404).json({ message: 'Recipient warrior not found' });
+    }
+
+    // Friend request restriction applies ONLY if BOTH users are actual registered users (!isDemoUser).
+    // Existing hardcoded/demo users (isDemoUser: true) are preserved without restrictions.
+    if (currentUser && !currentUser.isDemoUser && recipientUser && !recipientUser.isDemoUser) {
+      const isFriends = currentUser.friends?.some(
+        (fId) => String(fId) === String(recipientId)
+      );
+
+      if (!isFriends) {
+        return res.status(403).json({
+          message: 'You must send a friend request and be accepted friends with this warrior before private messaging.',
+        });
+      }
+    }
+
     // Check if conversation already exists
     let conversation = await Conversation.findOne({
       isGroup: false,
@@ -165,7 +186,7 @@ const getMessages = async (req, res) => {
 // @route   POST /api/chat/messages
 const sendMessage = async (req, res) => {
   try {
-    const { conversationId, recipientId, text } = req.body;
+    const { conversationId, recipientId, text, replyTo } = req.body;
 
     if (!conversationId || !text || !text.trim()) {
       return res.status(400).json({ message: 'Conversation ID and message text are required' });
@@ -183,6 +204,10 @@ const sendMessage = async (req, res) => {
       delivered: true,
       read: false,
     };
+
+    if (replyTo && replyTo.text) {
+      messageData.replyTo = replyTo;
+    }
 
     if (conversation.isGroup) {
       // Group message - recipient is optional
@@ -305,6 +330,23 @@ const deleteMessage = async (req, res) => {
       return res.json({ _id: id, conversationId: message.conversationId, isUndone: true });
     }
 
+    if (req.query.restore === 'true') {
+      message.isDeleted = false;
+      const textToRestore = req.query.text
+        ? decodeURIComponent(String(req.query.text))
+        : req.body?.text;
+      if (textToRestore) {
+        message.text = textToRestore;
+      }
+      await message.save();
+
+      const populatedMessage = await Message.findById(message._id)
+        .populate('sender', 'username avatar avatarName role')
+        .populate('recipient', 'username avatar avatarName role');
+
+      return res.json(populatedMessage);
+    }
+
     message.isDeleted = true;
     message.text = 'This msg is deleted';
     await message.save();
@@ -398,6 +440,56 @@ const broadcastWarHorn = async (req, res) => {
   }
 };
 
+// @desc    Toggle emoji reaction on a message
+// @route   PUT /api/chat/messages/:id/react
+const reactMessage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { emoji } = req.body;
+
+    if (!emoji) {
+      return res.status(400).json({ message: 'Emoji reaction is required' });
+    }
+
+    const message = await Message.findById(id);
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found' });
+    }
+
+    if (!message.reactions) {
+      message.reactions = [];
+    }
+
+    const userIdStr = req.user._id.toString();
+    let reactionObj = message.reactions.find((r) => r.emoji === emoji);
+
+    if (reactionObj) {
+      const userIndex = reactionObj.users.findIndex((u) => u.toString() === userIdStr);
+      if (userIndex > -1) {
+        reactionObj.users.splice(userIndex, 1);
+        if (reactionObj.users.length === 0) {
+          message.reactions = message.reactions.filter((r) => r.emoji !== emoji);
+        }
+      } else {
+        reactionObj.users.push(req.user._id);
+      }
+    } else {
+      message.reactions.push({ emoji, users: [req.user._id] });
+    }
+
+    await message.save();
+
+    const populatedMessage = await Message.findById(message._id)
+      .populate('sender', 'username avatar avatarName role')
+      .populate('recipient', 'username avatar avatarName role');
+
+    res.json(populatedMessage);
+  } catch (error) {
+    console.error('[React Message Error]', error);
+    res.status(500).json({ message: 'Error toggling message reaction' });
+  }
+};
+
 module.exports = {
   getConversations,
   createOrGetConversation,
@@ -408,4 +500,5 @@ module.exports = {
   editMessage,
   deleteMessage,
   broadcastWarHorn,
+  reactMessage,
 };

@@ -10,6 +10,7 @@ const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const clanRoutes = require('./routes/clanRoutes');
+const friendRoutes = require('./routes/friendRoutes');
 const initChatSocket = require('./sockets/chatSocket');
 
 dotenv.config();
@@ -39,6 +40,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/clans', clanRoutes);
+app.use('/api/friends', friendRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', server: 'Clash of Chats Backend Server' });
