@@ -129,10 +129,12 @@ const acceptFriendRequest = async (req, res) => {
     const { requestId } = req.params;
     const userId = req.user._id;
 
-    const friendRequest = await FriendRequest.findOne({
-      _id: requestId,
-      recipient: userId,
-      status: 'pending',
+    // Search by FriendRequest _id OR sender ID where recipient is current user
+    let friendRequest = await FriendRequest.findOne({
+      $or: [
+        { _id: requestId, recipient: userId, status: 'pending' },
+        { sender: requestId, recipient: userId, status: 'pending' },
+      ],
     });
 
     if (!friendRequest) {
@@ -172,9 +174,13 @@ const rejectFriendRequest = async (req, res) => {
     const { requestId } = req.params;
     const userId = req.user._id;
 
+    // Search by FriendRequest _id OR sender/recipient ID
     const friendRequest = await FriendRequest.findOne({
-      _id: requestId,
-      $or: [{ recipient: userId }, { sender: userId }],
+      $or: [
+        { _id: requestId, $or: [{ recipient: userId }, { sender: userId }] },
+        { sender: requestId, recipient: userId },
+        { sender: userId, recipient: requestId },
+      ],
     });
 
     if (!friendRequest) {

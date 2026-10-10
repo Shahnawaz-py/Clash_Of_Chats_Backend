@@ -86,8 +86,43 @@ const getUserById = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'Warrior not found' });
     }
-    res.json(user);
+
+    const uObj = user.toObject();
+
+    if (req.user) {
+      const currentUser = await User.findById(req.user._id);
+      const friendsSet = new Set((currentUser?.friends || []).map((fId) => String(fId)));
+      const uIdStr = String(user._id);
+
+      if (user.isDemoUser) {
+        uObj.friendStatus = 'demo';
+      } else if (friendsSet.has(uIdStr)) {
+        uObj.friendStatus = 'friend';
+      } else {
+        const pendingReq = await FriendRequest.findOne({
+          $or: [
+            { sender: req.user._id, recipient: uIdStr },
+            { sender: uIdStr, recipient: req.user._id },
+          ],
+          status: 'pending',
+        });
+
+        if (pendingReq) {
+          if (String(pendingReq.sender) === String(req.user._id)) {
+            uObj.friendStatus = 'pending_sent';
+          } else {
+            uObj.friendStatus = 'pending_received';
+          }
+          uObj.friendRequestId = pendingReq._id;
+        } else {
+          uObj.friendStatus = 'none';
+        }
+      }
+    }
+
+    res.json(uObj);
   } catch (error) {
+    console.error('[Get User By Id Error]', error);
     res.status(500).json({ message: 'Server error fetching warrior profile' });
   }
 };
